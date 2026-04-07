@@ -1,28 +1,26 @@
 FROM python:3.11-slim
 
-# System dependencies for lxml, hdbscan (C extensions), and PDF processing
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    g++ \
-    libxml2-dev \
-    libxslt-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Keep Python output unbuffered in logs and avoid .pyc generation in containers.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Copy project definition first so dependency layer is cached
+# Copy project definition first so dependency install layer is cached.
 COPY pyproject.toml ./
 COPY cftc_pipeline/ ./cftc_pipeline/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-# Install the package and all dependencies
+# Install the package and all dependencies.
 RUN pip install --no-cache-dir -e .
 
-# Pre-download the sentence-transformer model used by the clustering stage
-# so it's baked into the image and won't block cold starts
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+# Optional: pre-download the sentence-transformer model.
+# Disabled by default to keep Railway builds significantly faster.
+ARG PRELOAD_EMBEDDING_MODEL=0
+RUN if [ "$PRELOAD_EMBEDDING_MODEL" = "1" ]; then \
+      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"; \
+    fi
 
 COPY start.sh ./
 RUN chmod +x start.sh
