@@ -187,10 +187,13 @@ pytest tests/ -v --cov=cftc_pipeline --cov-report=term-missing
 
 Use a managed PostgreSQL instance (RDS, Cloud SQL, Supabase). Set `DATABASE_URL` in environment.
 
-Run migrations:
+Run migrations (recommended as a separate release/one-off job, not on web startup):
 ```bash
 alembic upgrade head
 ```
+
+For Railway, web startup now skips migrations by default to avoid healthcheck timeouts.
+If you still want startup migrations, set `RUN_MIGRATIONS=true` (optionally tune `MIGRATION_TIMEOUT_SECONDS`, default `90`).
 
 ### Storage
 
