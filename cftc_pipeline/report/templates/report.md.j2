@@ -1,0 +1,194 @@
+# CFTC Docket {{ docket_id }} — Public Comment Analysis Report
+
+**Generated:** {{ generated_at }}
+**Report Run ID:** {{ report_run_id }}
+**Docket:** {{ docket_title }}
+
+---
+
+## 1. Overview
+
+| Metric | Count |
+|---|---|
+| Total submissions received | {{ stats.total_submissions }} |
+| Unique submissions (after dedup) | {{ stats.unique_submissions }} |
+| Exact duplicate submissions | {{ stats.exact_duplicates }} |
+| Near-duplicate submissions | {{ stats.near_duplicates }} |
+| Campaign / form-letter families | {{ stats.campaign_families }} |
+| Submissions with attachments | {{ stats.has_attachments }} |
+| Submissions with no text (attachment only) | {{ stats.attachment_only }} |
+| Analyzed by LLM | {{ stats.llm_analyzed }} |
+| Failed extraction | {{ stats.extraction_failed }} |
+
+### Commenter Mix
+
+| Commenter Type | Count | % |
+|---|---|---|
+{% for row in stats.commenter_mix %}| {{ row.type }} | {{ row.count }} | {{ row.pct }}% |
+{% endfor %}
+
+### Stance Breakdown
+
+| Stance | Raw Count | Unique Count |
+|---|---|---|
+{% for row in stats.stance_breakdown %}| {{ row.stance }} | {{ row.raw }} | {{ row.unique }} |
+{% endfor %}
+
+---
+
+## 2. Major Themes
+
+{% for cluster in top_clusters %}
+### Theme {{ loop.index }}: {{ cluster.label }}
+
+**Comments in theme:** {{ cluster.total_count }} total / {{ cluster.unique_count }} unique
+
+**Keywords:** {{ cluster.keywords | join(", ") }}
+
+{{ cluster.description }}
+
+**Representative arguments in support:**
+{% for arg in cluster.rep_arguments_for %}
+- {{ arg }}
+{% endfor %}
+
+**Representative arguments in opposition:**
+{% for arg in cluster.rep_arguments_against %}
+- {{ arg }}
+{% endfor %}
+
+**Representative excerpts:**
+{% for excerpt in cluster.rep_excerpts %}
+> {{ excerpt.text }}
+> — [Submission {{ excerpt.submission_id }}]({{ excerpt.url }}) ({{ excerpt.commenter }})
+
+{% endfor %}
+---
+{% endfor %}
+
+---
+
+## 3. Support / Opposition Analysis
+
+### Raw counts (all submissions)
+
+- **Support:** {{ stats.stance_breakdown | selectattr('stance', 'equalto', 'support') | map(attribute='raw') | first | default(0) }}
+- **Oppose:** {{ stats.stance_breakdown | selectattr('stance', 'equalto', 'oppose') | map(attribute='raw') | first | default(0) }}
+- **Mixed:** {{ stats.stance_breakdown | selectattr('stance', 'equalto', 'mixed') | map(attribute='raw') | first | default(0) }}
+
+### Adjusted counts (unique submissions only)
+
+- **Support:** {{ stats.stance_breakdown | selectattr('stance', 'equalto', 'support') | map(attribute='unique') | first | default(0) }}
+- **Oppose:** {{ stats.stance_breakdown | selectattr('stance', 'equalto', 'oppose') | map(attribute='unique') | first | default(0) }}
+
+### Notable organizations
+
+{% for org in notable_organizations %}
+- **{{ org.name }}** ({{ org.commenter_type }}) — Stance: {{ org.stance }}
+{% endfor %}
+
+---
+
+## 4. High-Signal Comments
+
+### Most substantive legal analyses
+
+{% for sub in high_signal.legal %}
+**{{ loop.index }}. {{ sub.commenter_name }}** {% if sub.organization %}({{ sub.organization }}){% endif %}
+- Submission ID: {{ sub.id }} | Stance: {{ sub.stance }} | Score: {{ sub.substantive_score }}
+- {{ sub.summary_short }}
+- Key legal arguments: {% for arg in sub.legal_arguments[:3] %}{{ arg }}{% if not loop.last %}; {% endif %}{% endfor %}
+- Sources: {% for s in sub.cited_authorities[:3] %}{{ s }}{% if not loop.last %}, {% endif %}{% endfor %}
+
+{% endfor %}
+
+### Most substantive economic analyses
+
+{% for sub in high_signal.economic %}
+**{{ loop.index }}. {{ sub.commenter_name }}** {% if sub.organization %}({{ sub.organization }}){% endif %}
+- Submission ID: {{ sub.id }} | Stance: {{ sub.stance }} | Score: {{ sub.substantive_score }}
+- {{ sub.summary_short }}
+
+{% endfor %}
+
+### Strongest operational comments
+
+{% for sub in high_signal.operational %}
+**{{ loop.index }}. {{ sub.commenter_name }}** {% if sub.organization %}({{ sub.organization }}){% endif %}
+- Submission ID: {{ sub.id }} | Stance: {{ sub.stance }}
+- {{ sub.summary_short }}
+
+{% endfor %}
+
+---
+
+## 5. Outliers and Novel Arguments
+
+These submissions raised issues not well-represented in the main clusters.
+
+{% for sub in outliers %}
+**{{ loop.index }}. {{ sub.commenter_name }}** {% if sub.organization %}({{ sub.organization }}){% endif %} — Submission {{ sub.id }}
+{{ sub.summary_short }}
+
+{% endfor %}
+
+---
+
+## 6. Methodology and Limitations
+
+### Scraping
+
+- **Platform:** CFTC Public Comments Portal (comments.cftc.gov)
+- **Docket:** {{ docket_id }}
+- **Coverage:** {{ stats.total_submissions }} submissions crawled of {{ stats.total_submissions }} listed
+- **Attachment downloads:** {{ stats.attachment_downloads_ok }} successful / {{ stats.attachment_downloads_failed }} failed
+
+### Text Extraction
+
+- HTML body extraction: BeautifulSoup
+- PDF extraction: PyMuPDF (primary), pdfplumber (fallback)
+- DOCX extraction: python-docx
+- Submissions with no extractable text: {{ stats.extraction_failed }}
+- Partial extractions (e.g. scanned PDFs): logged separately
+
+### Deduplication
+
+- **Method:** SHA-256 exact hash + MinHash LSH (threshold {{ dedup_threshold }}, {{ minhash_perms }} permutations)
+- **Campaign threshold:** groups of ≥ {{ campaign_min }} identical/near-identical submissions flagged
+- All dedup decisions are recorded with `dedup_method` and `similarity_score` fields
+
+### LLM Analysis
+
+- **Model:** {{ llm_model }}
+- **Prompt version:** {{ prompt_version }}
+- **Schema:** Pydantic-validated JSON with automatic retry (max 3 attempts)
+- **Limitation:** LLM may misclassify stance for mixed or ambiguous comments
+- **Limitation:** Text truncated at 12,000 characters for very long submissions
+
+### Clustering
+
+- **Embedding model:** all-MiniLM-L6-v2
+- **Algorithm:** HDBSCAN (min_cluster_size={{ hdbscan_min_cluster }})
+- **Noise points** (unclustered): {{ stats.noise_submissions }} submissions
+- Cluster labels are auto-generated and may be overridden by analysts in the UI
+
+---
+
+## 7. Traceability Appendix
+
+Every claim in this report is traceable to a specific submission. The full traceability
+table is available in the analyst UI at each report claim's source link.
+
+| Report Claim | Submission ID | Source Excerpt |
+|---|---|---|
+{% for claim in claim_sources[:50] %}| {{ claim.claim_text[:80] }} | {{ claim.submission_id }} | {{ claim.source_excerpt[:100] }} |
+{% endfor %}
+{% if claim_sources | length > 50 %}
+*… and {{ claim_sources | length - 50 }} more claims. See analyst UI for full table.*
+{% endif %}
+
+---
+
+*This report was generated automatically by the CFTC Comment Pipeline. All summaries
+and classifications derive from AI analysis and should be verified against source documents
+before use in regulatory proceedings.*
