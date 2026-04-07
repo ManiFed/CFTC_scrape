@@ -183,7 +183,7 @@ def create_tables():
 def export_csv(docket: str):
     """Export submissions and analyses to CSV/JSONL."""
     from cftc_pipeline.db.models import Docket
-    from cftc_pipeline.pipeline.stages import _build_exports
+    from cftc_pipeline.pipeline.runner import _build_exports
 
     with get_db() as db:
         d = db.query(Docket).filter(Docket.docket_id == docket).first()
