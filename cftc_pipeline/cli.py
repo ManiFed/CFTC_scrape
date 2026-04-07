@@ -33,6 +33,22 @@ def _running_on_railway() -> bool:
     )
 
 
+def _format_empty_export_guidance(docket: str, pipeline_has_run: bool) -> str:
+    """Return a helpful message when export finds zero submissions."""
+    if pipeline_has_run:
+        return (
+            f"Warning: 0 submissions found for docket '{docket}'. "
+            "This usually means the docket URL has no public comments yet, "
+            "or the registered docket URL is incorrect. "
+            f"Check stage results with: cftc status --docket {docket}. "
+            f"If needed, rerun crawl with: cftc run --docket {docket} --stages crawl_docket --force"
+        )
+    return (
+        f"Warning: 0 submissions found for docket '{docket}'. "
+        f"Run the pipeline first: cftc run --docket {docket}"
+    )
+
+
 @click.group()
 def cli():
     """CFTC public comment pipeline."""
@@ -182,7 +198,7 @@ def create_tables():
 @click.option("--docket", required=True, help="CFTC docket ID")
 def export_csv(docket: str):
     """Export submissions and analyses to CSV/JSONL."""
-    from cftc_pipeline.db.models import Docket
+    from cftc_pipeline.db.models import Docket, JobStatus, PipelineJob
     from cftc_pipeline.pipeline.runner import _build_exports
 
     with get_db() as db:
@@ -190,14 +206,21 @@ def export_csv(docket: str):
         if not d:
             console.print(f"[red]Docket '{docket}' not found.[/red]")
             sys.exit(1)
+        pipeline_has_run = (
+            db.query(PipelineJob.id)
+            .filter(
+                PipelineJob.docket_id == d.id,
+                PipelineJob.status == JobStatus.completed,
+            )
+            .first()
+            is not None
+        )
         result = _build_exports(db, d.id, {})
     sub_count = result.get("submission_count", 0)
     analysis_count = result.get("analysis_count", 0)
     if sub_count == 0:
-        console.print(
-            f"[yellow]Warning: 0 submissions found for docket '{docket}'. "
-            f"Export files are empty. Run the pipeline first: cftc run --docket {docket}[/yellow]"
-        )
+        guidance = _format_empty_export_guidance(docket, pipeline_has_run=pipeline_has_run)
+        console.print(f"[yellow]{guidance}[/yellow]")
     else:
         console.print(
             f"[green]Exports complete: {sub_count} submissions, "

@@ -21,3 +21,14 @@ def test_running_on_railway_detects_env(monkeypatch):
 
     monkeypatch.setenv("RAILWAY_SERVICE_ID", "svc_123")
     assert cli._running_on_railway()
+
+
+def test_format_empty_export_guidance_when_pipeline_has_run():
+    message = cli._format_empty_export_guidance("7654", pipeline_has_run=True)
+    assert "status --docket 7654" in message
+    assert "--stages crawl_docket --force" in message
+
+
+def test_format_empty_export_guidance_when_pipeline_not_run():
+    message = cli._format_empty_export_guidance("7654", pipeline_has_run=False)
+    assert message.endswith("cftc run --docket 7654")
