@@ -1,0 +1,8 @@
+[server]
+# Required for running behind Railway's proxy
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+gatherUsageStats = false
