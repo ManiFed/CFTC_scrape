@@ -162,6 +162,10 @@ All settings in `.env`:
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL connection URL |
+| `OPENAI_API_KEY` | — | OpenAI API key |
+| `OPENROUTER_API_KEY` | — | Optional OpenRouter API key (used instead of OpenAI when set) |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
+| `LLM_MODEL` | `gpt-4.1` | LLM model ID (OpenAI or OpenRouter) |
 | `OPENAI_API_KEY` | — | OpenAI API key (preferred when available) |
 | `CODEX_CLI_AUTH_TOKEN` | — | Codex CLI auth token (fallback when API key is unset) |
 | `LLM_MODEL` | `gpt-4.1` | OpenAI model ID |

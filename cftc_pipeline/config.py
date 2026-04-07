@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = ""
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
     codex_cli_auth_token: str = ""
 
     def openai_auth_token(self) -> str:
