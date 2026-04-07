@@ -190,5 +190,16 @@ def export_csv(docket: str):
         if not d:
             console.print(f"[red]Docket '{docket}' not found.[/red]")
             sys.exit(1)
-        _build_exports(db, d.id, {})
-    console.print("[green]Exports complete.[/green]")
+        result = _build_exports(db, d.id, {})
+    sub_count = result.get("submission_count", 0)
+    analysis_count = result.get("analysis_count", 0)
+    if sub_count == 0:
+        console.print(
+            f"[yellow]Warning: 0 submissions found for docket '{docket}'. "
+            f"Export files are empty. Run the pipeline first: cftc run --docket {docket}[/yellow]"
+        )
+    else:
+        console.print(
+            f"[green]Exports complete: {sub_count} submissions, "
+            f"{analysis_count} analyses → {result.get('path', '')}[/green]"
+        )

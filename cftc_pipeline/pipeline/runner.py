@@ -52,13 +52,15 @@ def get_stage_fn(stage: str) -> Callable:
 
 
 def _build_exports_stub(db: Session, docket_id: int, config: dict) -> dict:
-    """Placeholder for CSV/JSONL export generation."""
-    _build_exports(db, docket_id, config)
-    return {"status": "ok"}
+    """CSV/JSONL export generation."""
+    return _build_exports(db, docket_id, config)
 
 
-def _build_exports(db: Session, docket_id: int, config: dict) -> None:
-    """Export key tables to CSV/JSONL for downstream use."""
+def _build_exports(db: Session, docket_id: int, config: dict) -> dict:
+    """Export key tables to CSV/JSONL for downstream use.
+
+    Returns a dict with export stats (submission_count, analysis_count, path).
+    """
     import csv
     import json
     from pathlib import Path
@@ -67,10 +69,25 @@ def _build_exports(db: Session, docket_id: int, config: dict) -> None:
     from cftc_pipeline.db.models import LLMAnalysis, Submission, SubmissionDedupe
 
     docket = db.get(Docket, docket_id)
+    if docket is None:
+        logger.error("_build_exports: docket_id=%d not found in database", docket_id)
+        return {"submission_count": 0, "analysis_count": 0, "error": "docket not found"}
+
     out_dir = Path(settings.storage_base_path) / "exports" / docket.docket_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
     submissions = db.query(Submission).filter(Submission.docket_id == docket_id).all()
+
+    if not submissions:
+        logger.warning(
+            "_build_exports: 0 submissions found for docket %d (%s). "
+            "The export files will be empty. Make sure the pipeline has been "
+            "run first (cftc run --docket %s).",
+            docket_id,
+            docket.docket_id,
+            docket.docket_id,
+        )
+
     analyses = {
         a.submission_id: a
         for a in db.query(LLMAnalysis)
@@ -130,7 +147,17 @@ def _build_exports(db: Session, docket_id: int, config: dict) -> None:
             }
             f.write(json.dumps(record) + "\n")
 
-    logger.info("Exports written to %s", out_dir)
+    logger.info(
+        "Exports written to %s (%d submissions, %d analyses)",
+        out_dir,
+        len(submissions),
+        len(analyses),
+    )
+    return {
+        "submission_count": len(submissions),
+        "analysis_count": len(analyses),
+        "path": str(out_dir),
+    }
 
 
 def run_stage(
@@ -182,6 +209,15 @@ def run_stage(
         job.status = JobStatus.completed
         job.completed_at = datetime.utcnow()
         job.artifacts = artifacts or {}
+        # Update items_processed/items_failed from common artifact keys
+        a = artifacts or {}
+        job.items_processed = (
+            a.get("new", 0) + a.get("ok", 0) + a.get("processed", 0)
+            + a.get("ranked", 0) + a.get("submission_count", 0)
+            + a.get("groups", 0) + a.get("clusters", 0)
+            + a.get("clusters_summarized", 0)
+        )
+        job.items_failed = a.get("failed", 0)
         db.commit()
         logger.info("Stage '%s' completed: %s", stage, artifacts)
         return artifacts or {}
