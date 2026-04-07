@@ -53,13 +53,15 @@ def _extract_json(text: str) -> dict:
 )
 def _call_llm(system: str, human: str) -> str:
     client = get_client()
-    message = client.responses.create(
+    response = client.chat.completions.create(
         model=settings.llm_model,
-        max_output_tokens=settings.llm_max_tokens,
-        instructions=system,
-        input=human,
+        max_tokens=settings.llm_max_tokens,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": human},
+        ],
     )
-    return message.output_text
+    return response.choices[0].message.content
 
 
 def analyze_submission(

@@ -631,9 +631,9 @@ def cluster_themes(db: Session, docket_id: int, config: dict) -> dict:
 
 def summarize_clusters(db: Session, docket_id: int, config: dict) -> dict:
     """Use LLM to generate cluster descriptions and rep arguments."""
-    from openai import OpenAI
+    from cftc_pipeline.analysis.llm_analyzer import get_client
 
-    client = OpenAI(api_key=settings.openai_auth_token())
+    client = get_client()
     clusters = (
         db.query(ThemeCluster).filter(ThemeCluster.docket_id == docket_id).all()
     )
@@ -681,14 +681,14 @@ Write:
 Return JSON: {{"description": "...", "rep_arguments_for": [...], "rep_arguments_against": [...]}}"""
 
         try:
-            resp = client.responses.create(
+            resp = client.chat.completions.create(
                 model=settings.llm_model,
-                max_output_tokens=1000,
-                input=prompt,
+                max_tokens=1000,
+                messages=[{"role": "user", "content": prompt}],
             )
             import json
 
-            text = resp.output_text.strip()
+            text = resp.choices[0].message.content.strip()
             if text.startswith("```"):
                 text = "\n".join(l for l in text.split("\n") if not l.startswith("```"))
             data = json.loads(text)
