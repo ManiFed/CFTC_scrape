@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = ""
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
     # Storage
     storage_backend: str = "local"  # "local" | "s3"

@@ -162,7 +162,9 @@ All settings in `.env`:
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL connection URL |
 | `OPENAI_API_KEY` | — | OpenAI API key |
-| `LLM_MODEL` | `gpt-4.1` | OpenAI model ID |
+| `OPENROUTER_API_KEY` | — | Optional OpenRouter API key (used instead of OpenAI when set) |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
+| `LLM_MODEL` | `gpt-4.1` | LLM model ID (OpenAI or OpenRouter) |
 | `PROMPT_VERSION` | `v1` | Extraction prompt version |
 | `STORAGE_BACKEND` | `local` | `local` or `s3` |
 | `STORAGE_BASE_PATH` | `./data` | Local storage root |

@@ -25,7 +25,13 @@ _client: Optional[OpenAI] = None
 def get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = OpenAI(api_key=settings.openai_api_key)
+        if settings.openrouter_api_key:
+            _client = OpenAI(
+                api_key=settings.openrouter_api_key,
+                base_url=settings.openrouter_base_url,
+            )
+        else:
+            _client = OpenAI(api_key=settings.openai_api_key)
     return _client
 
 
