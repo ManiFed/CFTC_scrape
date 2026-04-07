@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    codex_cli_auth_token: str = ""
+
+    def openai_auth_token(self) -> str:
+        """Return API key or Codex CLI auth token for OpenAI client auth."""
+        return self.openai_api_key or self.codex_cli_auth_token
 
     # Storage
     storage_backend: str = "local"  # "local" | "s3"
