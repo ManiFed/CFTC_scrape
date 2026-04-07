@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import time
 from typing import Optional
+from urllib.parse import urlparse
 
 import requests
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -20,11 +21,14 @@ def _make_session() -> requests.Session:
     s.headers.update(
         {
             "User-Agent": (
-                "Mozilla/5.0 (compatible; CFTCCommentResearcher/1.0; "
-                "+https://github.com/cftc-pipeline)"
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/123.0.0.0 Safari/537.36"
             ),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
         }
     )
     return s
@@ -55,8 +59,26 @@ class RateLimiter:
 _rate_limiter = RateLimiter(settings.request_delay_seconds)
 
 
+def _is_retryable_http_error(exc: BaseException) -> bool:
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return exc.response.status_code in {403, 429, 500, 502, 503, 504}
+    return False
+
+
+def _cftc_headers_for_url(url: str) -> dict[str, str]:
+    parsed = urlparse(url)
+    if parsed.netloc.lower() != "comments.cftc.gov":
+        return {}
+    return {
+        "Origin": "https://comments.cftc.gov",
+        "Referer": "https://comments.cftc.gov/PublicComments/CommentList.aspx",
+    }
+
+
 @retry(
-    retry=retry_if_exception_type((requests.Timeout, requests.ConnectionError)),
+    retry=retry_if_exception(_is_retryable_http_error),
     stop=stop_after_attempt(settings.max_retries),
     wait=wait_exponential(multiplier=1, min=2, max=30),
     reraise=True,
@@ -66,6 +88,10 @@ def fetch(url: str, method: str = "GET", **kwargs) -> requests.Response:
     _rate_limiter.wait()
     session = get_session()
     kwargs.setdefault("timeout", settings.request_timeout_seconds)
+    headers = dict(kwargs.pop("headers", {}))
+    headers = {**_cftc_headers_for_url(url), **headers}
+    if headers:
+        kwargs["headers"] = headers
     resp = session.request(method, url, **kwargs)
     resp.raise_for_status()
     return resp
