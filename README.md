@@ -189,6 +189,54 @@ pytest tests/ -v --cov=cftc_pipeline --cov-report=term-missing
 
 ## Production deployment
 
+### Railway setup
+
+This repo is already configured for Railway with:
+
+- `railway.toml` health checks for Streamlit (`/_stcore/health`)
+- Docker-based deploys (`builder = "DOCKERFILE"`)
+- `start.sh` that starts Streamlit on Railway's `PORT` and can optionally run migrations
+
+Follow these steps:
+
+1. **Create services in Railway**
+   - Create a **PostgreSQL** service.
+   - Create a service from this repo for the **web app**.
+   - Attach both services to the same Railway project.
+
+2. **Set required variables on the web service**
+   - `DATABASE_URL` (use Railway Postgres connection string)
+   - `OPENAI_API_KEY` (or `OPENROUTER_API_KEY`)
+   - `OPENROUTER_BASE_URL` (only if using OpenRouter)
+   - `LLM_MODEL` (optional override, defaults to `gpt-4.1`)
+   - `STORAGE_BACKEND` (`local` by default, or `s3`)
+   - `STORAGE_BASE_PATH` (default `./data`)
+   - `RUN_MIGRATIONS=false` (recommended on Railway web startup)
+   - Optional: `MIGRATION_TIMEOUT_SECONDS=90`
+
+3. **Deploy**
+   - Railway will build with the repository `Dockerfile`.
+   - On startup, `start.sh` launches Streamlit with:
+     - `--server.address=0.0.0.0`
+     - `--server.port=$PORT`
+   - Health checks use `/_stcore/health` (already configured in `railway.toml`).
+
+4. **Run migrations safely**
+   - Recommended: run migrations as a one-off command/job:
+     ```bash
+     alembic upgrade head
+     ```
+   - Avoid running migrations in normal web boot unless needed.
+   - If you do want startup migrations, set `RUN_MIGRATIONS=true`.
+
+5. **Initialize a docket and run pipeline**
+   - Open a Railway shell / one-off command and run:
+     ```bash
+     cftc create-tables
+     cftc init-docket --docket "3116" --url "https://comments.cftc.gov/PublicComments/CommentList.aspx?id=3116" --title "Margin Requirements for Uncleared Swaps"
+     cftc run --docket 3116
+     ```
+
 ### Database
 
 Use a managed PostgreSQL instance (RDS, Cloud SQL, Supabase). Set `DATABASE_URL` in environment.
