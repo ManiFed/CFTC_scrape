@@ -1,0 +1,10 @@
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+# Streamlit's built-in health endpoint
+healthcheckPath = "/_stcore/health"
+# Give the container time to pull/build ML models on first start
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
