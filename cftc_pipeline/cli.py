@@ -3,16 +3,34 @@ from __future__ import annotations
 
 import sys
 import logging
+import os
+from urllib.parse import urlparse
 
 import click
 from rich.console import Console
 from rich.table import Table
+from sqlalchemy.exc import OperationalError
 
 from cftc_pipeline.db.session import get_db
 from cftc_pipeline.pipeline.runner import STAGE_ORDER, get_pipeline_status, run_pipeline, run_stage
 
 console = Console()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+
+
+def _is_likely_railway_private_host(database_url: str) -> bool:
+    """Return True when DATABASE_URL points at Railway's private-only hostname."""
+    hostname = (urlparse(database_url).hostname or "").lower()
+    return hostname.endswith(".railway.internal")
+
+
+def _running_on_railway() -> bool:
+    """Best-effort detection for Railway runtime."""
+    return bool(
+        os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("RAILWAY_PROJECT_ID")
+        or os.getenv("RAILWAY_SERVICE_ID")
+    )
 
 
 @click.group()
@@ -140,8 +158,23 @@ def create_tables():
     """Create all database tables (idempotent)."""
     from cftc_pipeline.db.models import Base
     from cftc_pipeline.db.session import engine
+    from cftc_pipeline.config import settings
 
-    Base.metadata.create_all(engine)
+    try:
+        Base.metadata.create_all(engine)
+    except OperationalError as exc:
+        if _is_likely_railway_private_host(settings.database_url) and not _running_on_railway():
+            console.print(
+                "[red]Database connection failed.[/red] "
+                "Your DATABASE_URL uses a Railway private host (.railway.internal), "
+                "which is only reachable from inside Railway's network."
+            )
+            console.print(
+                "Use Railway's [bold]public/external[/bold] Postgres URL for local development, "
+                "or run this command inside a Railway shell."
+            )
+            sys.exit(1)
+        raise exc
     console.print("[green]Tables created (or already exist).[/green]")
 
 
