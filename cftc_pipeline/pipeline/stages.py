@@ -74,7 +74,15 @@ def crawl_docket(db: Session, docket_id: int, config: dict) -> dict:
         processed += 1
 
     db.commit()
-    logger.info("crawl_docket: %d new, %d skipped", processed, skipped)
+    if processed == 0 and skipped == 0:
+        logger.warning(
+            "crawl_docket: found 0 submissions for docket %d (url=%s). "
+            "Check the URL is correct and the docket has public comments.",
+            docket_id,
+            url,
+        )
+    else:
+        logger.info("crawl_docket: %d new, %d skipped", processed, skipped)
     return {"new": processed, "skipped": skipped}
 
 
