@@ -78,6 +78,18 @@ def _parse_date(text: str) -> Optional[datetime]:
     return None
 
 
+def _detect_block_page(html: bytes) -> Optional[str]:
+    """Return a description if the response looks like a bot-detection or error page."""
+    snippet = html[:4096].lower()
+    if b"checking your browser" in snippet or b"just a moment" in snippet:
+        return "Cloudflare challenge page"
+    if b"access denied" in snippet and b"cftc" not in snippet[:500]:
+        return "Access denied page"
+    if b"<title>error</title>" in snippet or b"503 service" in snippet:
+        return "Error page"
+    return None
+
+
 def crawl_comment_list(docket_url: str) -> Iterator[CommentListEntry]:
     """Yield every comment list entry for a docket, handling pagination."""
     page_num = 1
@@ -92,11 +104,30 @@ def crawl_comment_list(docket_url: str) -> Iterator[CommentListEntry]:
             resp = fetch(docket_url, method="POST", data=post_data)
 
         html = resp.content
+
+        # Detect bot-block / challenge pages before trying to parse
+        block_reason = _detect_block_page(html)
+        if block_reason:
+            raise RuntimeError(
+                f"CFTC page returned a '{block_reason}' instead of comment data. "
+                f"The site may be blocking automated access. URL: {docket_url}"
+            )
+
         soup = BeautifulSoup(html, "lxml")
 
-        entries = list(_parse_list_page(soup))
+        entries = list(_parse_list_page(soup, html))
         if not entries:
-            logger.info("No entries on page %d — done.", page_num)
+            if page_num == 1:
+                logger.warning(
+                    "No comment entries found on page 1 of %s. "
+                    "This could mean: the docket has no public comments, "
+                    "the URL is incorrect, or the page structure has changed. "
+                    "First 500 chars of response:\n%s",
+                    docket_url,
+                    html[:500].decode("utf-8", errors="replace"),
+                )
+            else:
+                logger.info("No entries on page %d — done.", page_num)
             break
 
         yield from entries
@@ -116,13 +147,23 @@ def crawl_comment_list(docket_url: str) -> Iterator[CommentListEntry]:
         page_num += 1
 
 
-def _parse_list_page(soup: BeautifulSoup) -> Iterator[CommentListEntry]:
+def _parse_list_page(soup: BeautifulSoup, raw_html: bytes = b"") -> Iterator[CommentListEntry]:
     """Parse comment rows from a list page."""
     table = soup.find("table", id=re.compile(r"gvCommentList", re.I))
     if table is None:
         # Fallback: look for any table with comment links
         table = soup.find("table", class_=re.compile(r"grid|comment", re.I))
     if table is None:
+        # Log what tables ARE present to help diagnose structure changes
+        all_tables = soup.find_all("table")
+        table_info = [(t.get("id"), t.get("class")) for t in all_tables[:5]]
+        logger.warning(
+            "Could not find comment list table (expected id~'gvCommentList'). "
+            "Tables found on page: %s. "
+            "HTML snippet: %s",
+            table_info,
+            raw_html[:300].decode("utf-8", errors="replace") if raw_html else "(not available)",
+        )
         return
 
     rows = table.find_all("tr")
@@ -218,6 +259,13 @@ def fetch_comment_detail(entry: CommentListEntry) -> CommentDetail:
         or soup.find("main")
     )
 
+    if body_div is None:
+        logger.warning(
+            "Could not find comment body on detail page for %s. "
+            "Tried: id~'comment.*body', class~'comment.*text', id='MainContent', <main>. "
+            "Comment text will be empty.",
+            entry.detail_url,
+        )
     body_html = str(body_div) if body_div else ""
     body_text = body_div.get_text(separator="\n", strip=True) if body_div else ""
 
