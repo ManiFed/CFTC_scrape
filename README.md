@@ -17,17 +17,11 @@ End-to-end system for ingesting, analyzing, and reporting on CFTC public comment
 
 ## Quick start
 
-### 1. Prerequisites
+### 1. Prerequisites (local run with your existing Postgres URL)
 
 - Python 3.11+
-- PostgreSQL 14+ running locally (or connection URL)
-- OpenAI API key
-
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-createdb cftc_pipeline
-```
+- A valid PostgreSQL connection string (you already have this)
+- An OpenRouter API key
 
 ### 2. Install
 
@@ -40,13 +34,20 @@ pip install -e ".[dev]"
 
 ### 3. Configure
 
+Create a `.env` file in the repo root with **exactly** these values (replace placeholders):
+
 ```bash
-cp .env.example .env
-# Edit .env:
-#   DATABASE_URL=postgresql://localhost/cftc_pipeline
-#   OPENAI_API_KEY=sk-...
-#   # or CODEX_CLI_AUTH_TOKEN=...
+cat > .env << 'EOF'
+DATABASE_URL=postgresql+psycopg://<USERNAME>:<PASSWORD>@<HOST>:<PORT>/<DATABASE>
+OPENROUTER_API_KEY=<YOUR_OPENROUTER_API_KEY>
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=openai/gpt-4.1
+EOF
 ```
+
+Notes:
+- Use your real Postgres URL in `DATABASE_URL` (if your provider gives `postgres://...`, that usually works too).
+- Do **not** set `OPENAI_API_KEY` when using OpenRouter.
 
 ### 4. Create tables
 
@@ -162,13 +163,11 @@ All settings in `.env`:
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL connection URL |
-| `OPENAI_API_KEY` | — | OpenAI API key |
-| `OPENROUTER_API_KEY` | — | Optional OpenRouter API key (used instead of OpenAI when set) |
+| `OPENROUTER_API_KEY` | — | OpenRouter API key (set this for local setup in this guide) |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter-compatible API base URL |
 | `LLM_MODEL` | `gpt-4.1` | LLM model ID (OpenAI or OpenRouter) |
-| `OPENAI_API_KEY` | — | OpenAI API key (preferred when available) |
+| `OPENAI_API_KEY` | — | Optional OpenAI key (leave unset if using OpenRouter) |
 | `CODEX_CLI_AUTH_TOKEN` | — | Codex CLI auth token (fallback when API key is unset) |
-| `LLM_MODEL` | `gpt-4.1` | OpenAI model ID |
 | `PROMPT_VERSION` | `v1` | Extraction prompt version |
 | `STORAGE_BACKEND` | `local` | `local` or `s3` |
 | `STORAGE_BASE_PATH` | `./data` | Local storage root |
