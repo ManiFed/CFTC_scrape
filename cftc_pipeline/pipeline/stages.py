@@ -625,7 +625,7 @@ def summarize_clusters(db: Session, docket_id: int, config: dict) -> dict:
     """Use LLM to generate cluster descriptions and rep arguments."""
     from openai import OpenAI
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_auth_token())
     clusters = (
         db.query(ThemeCluster).filter(ThemeCluster.docket_id == docket_id).all()
     )

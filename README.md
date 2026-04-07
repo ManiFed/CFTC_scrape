@@ -45,6 +45,7 @@ cp .env.example .env
 # Edit .env:
 #   DATABASE_URL=postgresql://localhost/cftc_pipeline
 #   OPENAI_API_KEY=sk-...
+#   # or CODEX_CLI_AUTH_TOKEN=...
 ```
 
 ### 4. Create tables
@@ -161,7 +162,8 @@ All settings in `.env`:
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL connection URL |
-| `OPENAI_API_KEY` | — | OpenAI API key |
+| `OPENAI_API_KEY` | — | OpenAI API key (preferred when available) |
+| `CODEX_CLI_AUTH_TOKEN` | — | Codex CLI auth token (fallback when API key is unset) |
 | `LLM_MODEL` | `gpt-4.1` | OpenAI model ID |
 | `PROMPT_VERSION` | `v1` | Extraction prompt version |
 | `STORAGE_BACKEND` | `local` | `local` or `s3` |
