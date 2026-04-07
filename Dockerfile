@@ -13,7 +13,10 @@ COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
 # Install the package and all dependencies.
-RUN pip install --no-cache-dir -e .
+# --timeout 120: raise read-timeout limit to 2 min per chunk (default is 15 s,
+#   too short for large wheels like torch/sentence-transformers on slow hosts).
+# --retries 5: retry transient network errors up to 5 times.
+RUN pip install --no-cache-dir --timeout 120 --retries 5 -e .
 
 # Optional: pre-download the sentence-transformer model.
 # Disabled by default to keep Railway builds significantly faster.
