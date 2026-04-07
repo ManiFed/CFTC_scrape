@@ -7,7 +7,7 @@ End-to-end system for ingesting, analyzing, and reporting on CFTC public comment
 1. **Crawls** a CFTC public comment docket (list page + detail pages + attachments)
 2. **Extracts** text from HTML bodies, PDFs, and Word documents
 3. **Deduplicates** using exact hash + MinHash LSH + campaign detection
-4. **Analyzes** each submission with Claude (stance, issues, arguments, scores) — strict JSON schema
+4. **Analyzes** each submission with OpenAI (stance, issues, arguments, scores) — strict JSON schema
 5. **Clusters** submissions into issue themes using sentence embeddings + HDBSCAN
 6. **Ranks** submissions by substantive signal value
 7. **Generates** a traceable Markdown report
@@ -21,7 +21,7 @@ End-to-end system for ingesting, analyzing, and reporting on CFTC public comment
 
 - Python 3.11+
 - PostgreSQL 14+ running locally (or connection URL)
-- Anthropic API key
+- OpenAI API key
 
 ```bash
 brew install postgresql@16
@@ -44,7 +44,7 @@ pip install -e ".[dev]"
 cp .env.example .env
 # Edit .env:
 #   DATABASE_URL=postgresql://localhost/cftc_pipeline
-#   ANTHROPIC_API_KEY=sk-ant-...
+#   OPENAI_API_KEY=sk-...
 ```
 
 ### 4. Create tables
@@ -161,8 +161,8 @@ All settings in `.env`:
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL connection URL |
-| `ANTHROPIC_API_KEY` | — | Claude API key |
-| `LLM_MODEL` | `claude-opus-4-6` | Claude model ID |
+| `OPENAI_API_KEY` | — | OpenAI API key |
+| `LLM_MODEL` | `gpt-4.1` | OpenAI model ID |
 | `PROMPT_VERSION` | `v1` | Extraction prompt version |
 | `STORAGE_BACKEND` | `local` | `local` or `s3` |
 | `STORAGE_BASE_PATH` | `./data` | Local storage root |
@@ -283,7 +283,7 @@ cftc run-stage --docket 3116 --stage analyze_submission_llm
 
 Update `.env`:
 ```
-LLM_MODEL=claude-opus-4-6
+LLM_MODEL=gpt-4.1
 PROMPT_VERSION=v2
 ```
 
@@ -342,7 +342,7 @@ CFTC_scrape/
 │   │   └── deduplicator.py    # Exact + MinHash + campaign
 │   ├── analysis/
 │   │   ├── schemas.py         # Pydantic output schema
-│   │   ├── llm_analyzer.py    # Claude API calls + retry
+│   │   ├── llm_analyzer.py    # OpenAI API calls + retry
 │   │   └── prompts/
 │   │       └── v1_extraction.py
 │   ├── clustering/

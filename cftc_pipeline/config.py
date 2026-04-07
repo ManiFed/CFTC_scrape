@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql://postgres:password@localhost:5432/cftc_pipeline"
 
-    # Anthropic
-    anthropic_api_key: str = ""
+    # OpenAI
+    openai_api_key: str = ""
 
     # Storage
     storage_backend: str = "local"  # "local" | "s3"
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     cftc_base_url: str = "https://comments.cftc.gov"
 
     # LLM
-    llm_model: str = "claude-opus-4-6"
+    llm_model: str = "gpt-4.1"
     llm_max_tokens: int = 4096
     prompt_version: str = "v1"
 

@@ -5,7 +5,7 @@ import json
 import logging
 from typing import Optional
 
-import anthropic
+from openai import OpenAI
 from pydantic import ValidationError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -19,13 +19,13 @@ PROMPT_REGISTRY = {
     "v1": v1_extraction,
 }
 
-_client: Optional[anthropic.Anthropic] = None
+_client: Optional[OpenAI] = None
 
 
-def get_client() -> anthropic.Anthropic:
+def get_client() -> OpenAI:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        _client = OpenAI(api_key=settings.openai_api_key)
     return _client
 
 
@@ -47,13 +47,13 @@ def _extract_json(text: str) -> dict:
 )
 def _call_llm(system: str, human: str) -> str:
     client = get_client()
-    message = client.messages.create(
+    message = client.responses.create(
         model=settings.llm_model,
-        max_tokens=settings.llm_max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": human}],
+        max_output_tokens=settings.llm_max_tokens,
+        instructions=system,
+        input=human,
     )
-    return message.content[0].text
+    return message.output_text
 
 
 def analyze_submission(
