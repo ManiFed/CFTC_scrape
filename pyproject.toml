@@ -25,7 +25,7 @@ dependencies = [
     # Deduplication
     "datasketch>=1.6",
     # LLM
-    "anthropic>=0.25",
+    "openai>=1.0",
     # Embeddings / clustering
     "sentence-transformers>=3.0",
     "hdbscan>=0.8",

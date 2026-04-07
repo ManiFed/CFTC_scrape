@@ -623,9 +623,9 @@ def cluster_themes(db: Session, docket_id: int, config: dict) -> dict:
 
 def summarize_clusters(db: Session, docket_id: int, config: dict) -> dict:
     """Use LLM to generate cluster descriptions and rep arguments."""
-    import anthropic
+    from openai import OpenAI
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    client = OpenAI(api_key=settings.openai_api_key)
     clusters = (
         db.query(ThemeCluster).filter(ThemeCluster.docket_id == docket_id).all()
     )
@@ -673,14 +673,14 @@ Write:
 Return JSON: {{"description": "...", "rep_arguments_for": [...], "rep_arguments_against": [...]}}"""
 
         try:
-            resp = client.messages.create(
+            resp = client.responses.create(
                 model=settings.llm_model,
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}],
+                max_output_tokens=1000,
+                input=prompt,
             )
             import json
 
-            text = resp.content[0].text.strip()
+            text = resp.output_text.strip()
             if text.startswith("```"):
                 text = "\n".join(l for l in text.split("\n") if not l.startswith("```"))
             data = json.loads(text)
