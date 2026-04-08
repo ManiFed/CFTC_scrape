@@ -167,27 +167,44 @@ def _parse_list_page(soup: BeautifulSoup, raw_html: bytes = b"") -> Iterator[Com
         return
 
     rows = table.find_all("tr")
+    header_map = _header_index_map(rows[0]) if rows else {}
     for row in rows[1:]:  # skip header
         cells = row.find_all("td")
         if not cells:
             continue
         try:
-            entry = _parse_list_row(cells)
+            entry = _parse_list_row(cells, header_map)
             if entry:
                 yield entry
         except Exception as exc:
             logger.warning("Failed to parse row: %s", exc)
 
 
-def _parse_list_row(cells) -> Optional[CommentListEntry]:
+def _header_index_map(header_row) -> dict[str, int]:
+    """Build a normalized map from header label to column index."""
+    header_map: dict[str, int] = {}
+    if header_row is None:
+        return header_map
+
+    for idx, cell in enumerate(header_row.find_all(["th", "td"])):
+        label = cell.get_text(" ", strip=True).lower()
+        if label:
+            header_map[label] = idx
+    return header_map
+
+
+def _parse_list_row(cells, header_map: Optional[dict[str, int]] = None) -> Optional[CommentListEntry]:
     """Parse a single row from the comment list table."""
-    # CFTC list columns vary but typically:
-    # [0] commenter name (with detail link), [1] organization, [2] date
-    if len(cells) < 2:
+    if len(cells) < 1:
         return None
 
-    name_cell = cells[0]
-    link = name_cell.find("a")
+    # CFTC list columns vary. Find the first detail link anywhere in the row.
+    link = None
+    for cell in cells:
+        candidate = cell.find("a", href=re.compile(r"ViewComment\.aspx|id=", re.I))
+        if candidate is not None:
+            link = candidate
+            break
     if not link:
         return None
 
@@ -204,17 +221,26 @@ def _parse_list_row(cells) -> Optional[CommentListEntry]:
 
     commenter_name = link.get_text(strip=True) or "Unknown"
 
-    organization = None
-    if len(cells) > 1:
-        organization = cells[1].get_text(strip=True) or None
+    header_map = header_map or {}
 
-    submission_date = None
-    if len(cells) > 2:
-        submission_date = _parse_date(cells[2].get_text(strip=True))
-    elif len(cells) > 1:
-        # Some pages have date in col 1
-        date_text = cells[-1].get_text(strip=True)
-        submission_date = _parse_date(date_text)
+    def _cell_text(idx: Optional[int]) -> Optional[str]:
+        if idx is None or idx < 0 or idx >= len(cells):
+            return None
+        text = cells[idx].get_text(strip=True)
+        return text or None
+
+    org_idx = next((i for h, i in header_map.items() if "organiz" in h), 1 if len(cells) > 1 else None)
+    date_idx = next(
+        (
+            i
+            for h, i in header_map.items()
+            if "date" in h or "submitted" in h or "received" in h
+        ),
+        2 if len(cells) > 2 else (len(cells) - 1 if len(cells) > 1 else None),
+    )
+
+    organization = _cell_text(org_idx)
+    submission_date = _parse_date(_cell_text(date_idx) or "")
 
     return CommentListEntry(
         external_id=str(external_id),
