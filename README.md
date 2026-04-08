@@ -61,8 +61,8 @@ cftc create-tables
 
 ```bash
 cftc init-docket \
-  --docket "3116" \
-  --url "https://comments.cftc.gov/PublicComments/CommentList.aspx?id=3116" \
+  --docket "7654" \
+  --url "https://comments.cftc.gov/PublicComments/CommentList.aspx?id=7654" \
   --title "Margin Requirements for Uncleared Swaps"
 ```
 
@@ -70,22 +70,22 @@ cftc init-docket \
 
 ```bash
 # Full pipeline
-cftc run --docket 3116
+cftc run --docket 7654
 
 # Single stage
-cftc run-stage --docket 3116 --stage crawl_docket
+cftc run-stage --docket 7654 --stage crawl_docket
 
 # Specific stages only
-cftc run --docket 3116 --stages "crawl_docket,fetch_comment_pages,fetch_attachments"
+cftc run --docket 7654 --stages "crawl_docket,fetch_comment_pages,fetch_attachments"
 
 # Force re-run (skip idempotency check)
-cftc run --docket 3116 --stage extract_text --force
+cftc run --docket 7654 --stage extract_text --force
 ```
 
 ### 7. Check status
 
 ```bash
-cftc status --docket 3116
+cftc status --docket 7654
 ```
 
 ### 8. Launch the analyst UI
@@ -98,10 +98,10 @@ streamlit run cftc_pipeline/ui/streamlit_app.py
 ### 9. Export data
 
 ```bash
-cftc export-csv --docket 3116
-# Outputs: data/exports/3116/submissions.csv
-#          data/exports/3116/analyses.jsonl
-#          data/exports/3116/report_<id>.md
+cftc export-csv --docket 7654
+# Outputs: data/exports/7654/submissions.csv
+#          data/exports/7654/analyses.jsonl
+#          data/exports/7654/report_<id>.md
 ```
 
 ---
@@ -232,8 +232,8 @@ Follow these steps:
    - Open a Railway shell / one-off command and run:
      ```bash
      cftc create-tables
-     cftc init-docket --docket "3116" --url "https://comments.cftc.gov/PublicComments/CommentList.aspx?id=3116" --title "Margin Requirements for Uncleared Swaps"
-     cftc run --docket 3116
+     cftc init-docket --docket "7654" --url "https://comments.cftc.gov/PublicComments/CommentList.aspx?id=7654" --title "Margin Requirements for Uncleared Swaps"
+     cftc run --docket 7654
      ```
 
 ### Database
@@ -262,7 +262,7 @@ AWS_SECRET_ACCESS_KEY=...
 Use a cron job, GitHub Actions, or any scheduler:
 ```bash
 # Example cron: run nightly
-0 2 * * * cd /opt/cftc_pipeline && .venv/bin/cftc run --docket 3116
+0 2 * * * cd /opt/cftc_pipeline && .venv/bin/cftc run --docket 7654
 ```
 
 ### Serving the UI
@@ -282,7 +282,7 @@ WORKDIR /app
 COPY . .
 RUN pip install -e .
 ENV DATABASE_URL=...
-CMD ["cftc", "run", "--docket", "3116"]
+CMD ["cftc", "run", "--docket", "7654"]
 ```
 
 ---
@@ -292,7 +292,7 @@ CMD ["cftc", "run", "--docket", "3116"]
 ### Rerun a failed stage
 
 ```bash
-cftc run-stage --docket 3116 --stage fetch_attachments --force
+cftc run-stage --docket 7654 --stage fetch_attachments --force
 ```
 
 ### Reset a stage (delete job record manually)
@@ -332,7 +332,7 @@ DELETE FROM llm_analyses WHERE submission_id IN (42, 87, 103);
 ```
 
 ```bash
-cftc run-stage --docket 3116 --stage analyze_submission_llm
+cftc run-stage --docket 7654 --stage analyze_submission_llm
 ```
 
 ### Change the LLM model or prompt version
@@ -359,7 +359,7 @@ DELETE FROM pipeline_jobs WHERE docket_id = 1 AND stage IN ('cluster_themes', 's
 ```
 
 ```bash
-cftc run --docket 3116 --stages "cluster_themes,summarize_clusters,rank_high_signal_submissions,generate_report"
+cftc run --docket 7654 --stages "cluster_themes,summarize_clusters,rank_high_signal_submissions,generate_report"
 ```
 
 ---
