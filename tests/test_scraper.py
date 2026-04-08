@@ -56,6 +56,35 @@ SAMPLE_LIST_HTML_WITH_INDEX_COL = """
 </body></html>
 """
 
+# Simulates a page where CFTC changed href to use commentId= instead of id=
+SAMPLE_LIST_HTML_COMMENT_ID_PARAM = """
+<html><body>
+<table id="ctl00_MainContent_gvCommentList">
+  <tr><th>Commenter</th><th>Organization</th><th>Date</th></tr>
+  <tr>
+    <td><a href="/PublicComments/ViewComment.aspx?commentId=33001">Dana Jones</a></td>
+    <td>Acme</td>
+    <td>03/01/2025</td>
+  </tr>
+</table>
+</body></html>
+"""
+
+# Simulates a page where links don't contain ViewComment.aspx or id= at all (single link fallback)
+SAMPLE_LIST_HTML_SINGLE_LINK_FALLBACK = """
+<html><body>
+<table id="ctl00_MainContent_gvCommentList">
+  <tr><th>Commenter</th><th>Organization</th><th>Date</th><th>Action</th></tr>
+  <tr>
+    <td>Eve Williams</td>
+    <td>Big Corp</td>
+    <td>04/01/2025</td>
+    <td><a href="/PublicComments/Details.aspx?cid=44001">View</a></td>
+  </tr>
+</table>
+</body></html>
+"""
+
 
 class TestParseDate:
     def test_us_format(self):
@@ -102,6 +131,20 @@ class TestParseListPage:
         assert entries[0].commenter_name == "Alice Cooper"
         assert entries[0].organization == "Example Org"
         assert entries[0].submission_date is not None
+
+    def test_parses_rows_with_comment_id_param(self):
+        soup = BeautifulSoup(SAMPLE_LIST_HTML_COMMENT_ID_PARAM, "lxml")
+        entries = list(_parse_list_page(soup))
+        assert len(entries) == 1
+        assert entries[0].commenter_name == "Dana Jones"
+
+    def test_parses_rows_with_single_link_fallback(self):
+        """When no ViewComment/id= link is found, the single-link fallback should fire."""
+        soup = BeautifulSoup(SAMPLE_LIST_HTML_SINGLE_LINK_FALLBACK, "lxml")
+        entries = list(_parse_list_page(soup))
+        assert len(entries) == 1
+        assert entries[0].commenter_name == "Eve Williams"
+        assert "Details.aspx" in entries[0].detail_url
 
 
 class TestExtractAttachments:

@@ -78,6 +78,27 @@ def _parse_date(text: str) -> Optional[datetime]:
     return None
 
 
+def _maybe_save_debug_html(html: bytes, label: str) -> None:
+    """If CFTC_DEBUG_HTML_DIR is set, write raw HTML to a file for offline inspection."""
+    import os
+
+    debug_dir = os.environ.get("CFTC_DEBUG_HTML_DIR")
+    if not debug_dir or not html:
+        return
+    from pathlib import Path
+    from datetime import datetime
+
+    out = Path(debug_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+    path = out / f"cftc_{label}_{ts}.html"
+    try:
+        path.write_bytes(html)
+        logger.info("Saved debug HTML to %s", path)
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Could not save debug HTML: %s", exc)
+
+
 def _detect_block_page(html: bytes) -> Optional[str]:
     """Return a description if the response looks like a bot-detection or error page."""
     snippet = html[:4096].lower()
@@ -118,14 +139,20 @@ def crawl_comment_list(docket_url: str) -> Iterator[CommentListEntry]:
         entries = list(_parse_list_page(soup, html))
         if not entries:
             if page_num == 1:
+                all_tables = soup.find_all("table")
+                table_ids = [(t.get("id"), t.get("class")) for t in all_tables[:10]]
                 logger.warning(
                     "No comment entries found on page 1 of %s. "
                     "This could mean: the docket has no public comments, "
                     "the URL is incorrect, or the page structure has changed. "
-                    "First 500 chars of response:\n%s",
+                    "Tables on page: %s. "
+                    "Tip: set env var CFTC_DEBUG_HTML_DIR=/tmp to save the raw HTML for inspection. "
+                    "First 5000 chars of response:\n%s",
                     docket_url,
-                    html[:500].decode("utf-8", errors="replace"),
+                    table_ids,
+                    html[:5000].decode("utf-8", errors="replace"),
                 )
+                _maybe_save_debug_html(html, "page1_empty")
             else:
                 logger.info("No entries on page %d — done.", page_num)
             break
@@ -160,24 +187,40 @@ def _parse_list_page(soup: BeautifulSoup, raw_html: bytes = b"") -> Iterator[Com
         logger.warning(
             "Could not find comment list table (expected id~'gvCommentList'). "
             "Tables found on page: %s. "
-            "HTML snippet: %s",
+            "HTML snippet (first 5000 chars): %s",
             table_info,
-            raw_html[:300].decode("utf-8", errors="replace") if raw_html else "(not available)",
+            raw_html[:5000].decode("utf-8", errors="replace") if raw_html else "(not available)",
         )
+        _maybe_save_debug_html(raw_html, "no_table")
         return
 
     rows = table.find_all("tr")
     header_map = _header_index_map(rows[0]) if rows else {}
-    for row in rows[1:]:  # skip header
+    data_rows = [r for r in rows[1:] if r.find_all("td")]
+
+    entries: list[CommentListEntry] = []
+    for row in data_rows:
         cells = row.find_all("td")
-        if not cells:
-            continue
         try:
             entry = _parse_list_row(cells, header_map)
             if entry:
-                yield entry
+                entries.append(entry)
         except Exception as exc:
             logger.warning("Failed to parse row: %s", exc)
+
+    if not entries and data_rows:
+        all_hrefs = [a.get("href", "")[:120] for a in table.find_all("a", href=True)[:20]]
+        logger.warning(
+            "Comment list table found with %d data rows but 0 entries could be parsed. "
+            "Links in table: %s. "
+            "First data row HTML: %.800s",
+            len(data_rows),
+            all_hrefs,
+            str(data_rows[0]),
+        )
+        _maybe_save_debug_html(raw_html, "no_entries")
+
+    yield from entries
 
 
 def _header_index_map(header_row) -> dict[str, int]:
@@ -199,12 +242,35 @@ def _parse_list_row(cells, header_map: Optional[dict[str, int]] = None) -> Optio
         return None
 
     # CFTC list columns vary. Find the first detail link anywhere in the row.
+    # Primary: match known CFTC comment detail URL patterns.
     link = None
     for cell in cells:
-        candidate = cell.find("a", href=re.compile(r"ViewComment\.aspx|id=", re.I))
+        candidate = cell.find(
+            "a",
+            href=re.compile(r"ViewComment\.aspx|[?&]id=|[?&][Cc]omment[Ii]d=", re.I),
+        )
         if candidate is not None:
             link = candidate
             break
+
+    # Fallback: if the primary regex found nothing, accept any single real (non-JS,
+    # non-fragment) link in the row.  On a comment-list page each data row should
+    # contain exactly one navigable link – the comment detail link.
+    if not link:
+        real_links = [
+            a
+            for cell in cells
+            for a in cell.find_all("a", href=True)
+            if not a["href"].startswith("#")
+            and "javascript:" not in a["href"].lower()
+            and a["href"].strip()
+        ]
+        if len(real_links) == 1:
+            link = real_links[0]
+            logger.debug(
+                "Used fallback single-link detection for row (href=%s)", link["href"][:100]
+            )
+
     if not link:
         return None
 
@@ -217,9 +283,13 @@ def _parse_list_row(cells, header_map: Optional[dict[str, int]] = None) -> Optio
     # Extract comment ID from URL
     parsed = urlparse(detail_url)
     qs = parse_qs(parsed.query)
-    external_id = qs.get("id", [None])[0] or href
-
-    commenter_name = link.get_text(strip=True) or "Unknown"
+    # Support both ?id= and ?commentId= parameter styles
+    external_id = (
+        qs.get("id", [None])[0]
+        or qs.get("commentId", [None])[0]
+        or qs.get("commentid", [None])[0]
+        or href
+    )
 
     header_map = header_map or {}
 
@@ -228,6 +298,24 @@ def _parse_list_row(cells, header_map: Optional[dict[str, int]] = None) -> Optio
             return None
         text = cells[idx].get_text(strip=True)
         return text or None
+
+    # Commenter name: use the link text when the link wraps the name (typical CFTC layout).
+    # If the link text looks like a generic action word ("View", "Details", etc.), fall back
+    # to the commenter-name column identified by the header map, or else the first
+    # non-link text cell in the row.
+    _GENERIC_ACTIONS = {"view", "details", "open", "select", "read", "see", "more"}
+    link_text = link.get_text(strip=True)
+    if link_text.lower() in _GENERIC_ACTIONS:
+        name_idx = next(
+            (i for h, i in header_map.items() if "name" in h or "comment" in h.split()),
+            None,
+        )
+        commenter_name = _cell_text(name_idx) or next(
+            (cells[i].get_text(strip=True) for i in range(len(cells)) if not cells[i].find("a")),
+            "Unknown",
+        )
+    else:
+        commenter_name = link_text or "Unknown"
 
     org_idx = next((i for h, i in header_map.items() if "organiz" in h), 1 if len(cells) > 1 else None)
     date_idx = next(
