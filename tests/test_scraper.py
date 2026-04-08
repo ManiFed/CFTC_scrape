@@ -42,6 +42,20 @@ SAMPLE_DETAIL_HTML = """
 </body></html>
 """
 
+SAMPLE_LIST_HTML_WITH_INDEX_COL = """
+<html><body>
+<table id="ctl00_MainContent_gvCommentList">
+  <tr><th>#</th><th>Commenter</th><th>Organization</th><th>Date Submitted</th></tr>
+  <tr>
+    <td>1</td>
+    <td><a href="/PublicComments/ViewComment.aspx?id=22345">Alice Cooper</a></td>
+    <td>Example Org</td>
+    <td>February 2, 2025</td>
+  </tr>
+</table>
+</body></html>
+"""
+
 
 class TestParseDate:
     def test_us_format(self):
@@ -79,6 +93,15 @@ class TestParseListPage:
         soup = BeautifulSoup(SAMPLE_LIST_HTML, "lxml")
         entries = list(_parse_list_page(soup))
         assert entries[1].organization is None or entries[1].organization == ""
+
+    def test_parses_rows_when_link_not_in_first_column(self):
+        soup = BeautifulSoup(SAMPLE_LIST_HTML_WITH_INDEX_COL, "lxml")
+        entries = list(_parse_list_page(soup))
+        assert len(entries) == 1
+        assert entries[0].external_id == "22345"
+        assert entries[0].commenter_name == "Alice Cooper"
+        assert entries[0].organization == "Example Org"
+        assert entries[0].submission_date is not None
 
 
 class TestExtractAttachments:
