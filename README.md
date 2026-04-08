@@ -63,7 +63,7 @@ cftc create-tables
 cftc init-docket \
   --docket "7654" \
   --url "https://comments.cftc.gov/PublicComments/CommentList.aspx?id=7654" \
-  --title "Margin Requirements for Uncleared Swaps"
+  --title "Prediction Markets"
 ```
 
 ### 6. Run the pipeline
