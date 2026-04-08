@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import streamlit as st
 import pandas as pd
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from cftc_pipeline.db.session import SessionLocal
@@ -44,13 +45,27 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 
 
-@st.cache_resource
-def get_db_session():
-    return SessionLocal()
+def _create_db_session() -> Session:
+    session = SessionLocal()
+    session.execute(text("SELECT 1"))
+    return session
 
 
 def db() -> Session:
-    return get_db_session()
+    session = st.session_state.get("db_session")
+    if session is None:
+        session = _create_db_session()
+        st.session_state["db_session"] = session
+        return session
+
+    try:
+        session.execute(text("SELECT 1"))
+    except OperationalError:
+        session.close()
+        session = _create_db_session()
+        st.session_state["db_session"] = session
+
+    return session
 
 
 # ---------------------------------------------------------------------------
