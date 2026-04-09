@@ -31,7 +31,7 @@ def get_client() -> OpenAI:
                 base_url=settings.openrouter_base_url,
             )
         else:
-            _client = OpenAI(api_key=settings.openai_api_key)
+            _client = OpenAI(api_key=settings.openai_auth_token())
     return _client
 
 
