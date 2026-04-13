@@ -4,7 +4,7 @@ builder = "DOCKERFILE"
 [deploy]
 # Explicitly use the startup script that binds Streamlit to Railway's PORT.
 startCommand = "./start.sh"
-preDeployCommand = "alembic upgrade head && cftc create-tables && cftc init-docket --docket \"3116\" --url \"https://comments.cftc.gov/PublicComments/CommentList.aspx?id=3116\" --title \"Margin Requirements for Uncleared Swaps\" && cftc run --docket 3116"
+preDeployCommand = "alembic upgrade head && cftc create-tables && cftc init-docket --docket \"7654\" --url \"https://comments.cftc.gov/PublicComments/CommentList.aspx?id=7654\" --title \"Margin Requirements for Uncleared Swaps\" && cftc run --docket 7654 --stop-after dedupe_submissions"
 
 # Streamlit's built-in health endpoint.
 healthcheckPath = "/_stcore/health"

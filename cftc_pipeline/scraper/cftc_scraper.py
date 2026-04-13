@@ -122,7 +122,12 @@ def crawl_comment_list(docket_url: str) -> Iterator[CommentListEntry]:
         if page_num == 1:
             resp = fetch(docket_url)
         else:
-            resp = fetch(docket_url, method="POST", data=post_data)
+            resp = fetch(
+                docket_url,
+                method="POST",
+                data=post_data,
+                headers={"Referer": docket_url},
+            )
 
         html = resp.content
 
@@ -361,7 +366,7 @@ def _find_next_page_link(soup: BeautifulSoup, current_page: int) -> Optional[str
 
 def fetch_comment_detail(entry: CommentListEntry) -> CommentDetail:
     """Fetch and parse a single comment detail page."""
-    resp = fetch(entry.detail_url)
+    resp = fetch(entry.detail_url, headers={"Referer": BASE + LIST_PATH})
     raw_html = resp.content
     soup = BeautifulSoup(raw_html, "lxml")
 

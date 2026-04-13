@@ -67,13 +67,16 @@ def _is_retryable_http_error(exc: BaseException) -> bool:
     return False
 
 
-def _cftc_headers_for_url(url: str) -> dict[str, str]:
+def _cftc_headers_for_url(url: str, referer: str = "") -> dict[str, str]:
     parsed = urlparse(url)
     if parsed.netloc.lower() != "comments.cftc.gov":
         return {}
+    # Use the caller-supplied referer when available, otherwise fall back to the
+    # plain list page (still valid for the initial GET).
+    effective_referer = referer or "https://comments.cftc.gov/PublicComments/CommentList.aspx"
     return {
         "Origin": "https://comments.cftc.gov",
-        "Referer": "https://comments.cftc.gov/PublicComments/CommentList.aspx",
+        "Referer": effective_referer,
     }
 
 
@@ -88,10 +91,13 @@ def fetch(url: str, method: str = "GET", **kwargs) -> requests.Response:
     _rate_limiter.wait()
     session = get_session()
     kwargs.setdefault("timeout", settings.request_timeout_seconds)
-    headers = dict(kwargs.pop("headers", {}))
-    headers = {**_cftc_headers_for_url(url), **headers}
-    if headers:
-        kwargs["headers"] = headers
+    caller_headers = dict(kwargs.pop("headers", {}))
+    # Allow callers to pass an explicit Referer via headers; otherwise derive it.
+    referer = caller_headers.pop("Referer", caller_headers.pop("referer", ""))
+    cftc_headers = _cftc_headers_for_url(url, referer=referer)
+    merged = {**cftc_headers, **caller_headers}
+    if merged:
+        kwargs["headers"] = merged
     resp = session.request(method, url, **kwargs)
     resp.raise_for_status()
     return resp
