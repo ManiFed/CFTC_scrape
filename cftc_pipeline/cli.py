@@ -170,6 +170,66 @@ def status(docket: str):
 
 
 @cli.command()
+@click.option("--docket", required=True, help="CFTC docket ID")
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt")
+def delete_docket(docket: str, yes: bool):
+    """Delete a docket and all its data so it can be re-initialised and re-run."""
+    from cftc_pipeline.db.models import (
+        ClusterMembership,
+        DedupeGroup,
+        Docket,
+        LLMAnalysis,
+        Attachment,
+        ExtractionResult,
+        PipelineJob,
+        ReportClaimSource,
+        ReportRun,
+        Submission,
+        SubmissionDedupe,
+        ThemeCluster,
+    )
+
+    with get_db() as db:
+        d = db.query(Docket).filter(Docket.docket_id == docket).first()
+        if not d:
+            console.print(f"[red]Docket '{docket}' not found.[/red]")
+            sys.exit(1)
+
+        if not yes:
+            console.print(
+                f"[yellow]This will permanently delete docket '{docket}' "
+                f"(id={d.id}) and ALL associated data.[/yellow]"
+            )
+            click.confirm("Are you sure?", abort=True)
+
+        docket_db_id = d.id
+
+        # Delete in dependency order to satisfy FK constraints.
+        sub_ids = [r for (r,) in db.query(Submission.id).filter(Submission.docket_id == docket_db_id)]
+        run_ids = [r for (r,) in db.query(ReportRun.id).filter(ReportRun.docket_id == docket_db_id)]
+
+        if sub_ids:
+            db.query(ClusterMembership).filter(ClusterMembership.submission_id.in_(sub_ids)).delete(synchronize_session=False)
+            db.query(SubmissionDedupe).filter(SubmissionDedupe.submission_id.in_(sub_ids)).delete(synchronize_session=False)
+            db.query(LLMAnalysis).filter(LLMAnalysis.submission_id.in_(sub_ids)).delete(synchronize_session=False)
+            db.query(ExtractionResult).filter(ExtractionResult.submission_id.in_(sub_ids)).delete(synchronize_session=False)
+            db.query(Attachment).filter(Attachment.submission_id.in_(sub_ids)).delete(synchronize_session=False)
+
+        if run_ids:
+            db.query(ReportClaimSource).filter(ReportClaimSource.report_run_id.in_(run_ids)).delete(synchronize_session=False)
+
+        db.query(ReportRun).filter(ReportRun.docket_id == docket_db_id).delete(synchronize_session=False)
+        db.query(ThemeCluster).filter(ThemeCluster.docket_id == docket_db_id).delete(synchronize_session=False)
+        db.query(DedupeGroup).filter(DedupeGroup.docket_id == docket_db_id).delete(synchronize_session=False)
+        db.query(PipelineJob).filter(PipelineJob.docket_id == docket_db_id).delete(synchronize_session=False)
+        db.query(Submission).filter(Submission.docket_id == docket_db_id).delete(synchronize_session=False)
+        db.query(Docket).filter(Docket.id == docket_db_id).delete(synchronize_session=False)
+
+    console.print(f"[green]Docket '{docket}' and all its data have been deleted.[/green]")
+    console.print(f"[dim]Re-register it with: cftc init-docket --docket {docket} --url <URL> --title <TITLE>[/dim]")
+
+
+@cli.command()
 def create_tables():
     """Create all database tables (idempotent)."""
     from cftc_pipeline.db.models import Base
