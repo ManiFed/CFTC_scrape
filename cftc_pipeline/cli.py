@@ -33,6 +33,28 @@ def _running_on_railway() -> bool:
     )
 
 
+def _print_db_connection_help() -> None:
+    """Print actionable guidance for known local DB connection issues."""
+    from cftc_pipeline.config import settings
+
+    if _is_likely_railway_private_host(settings.database_url) and not _running_on_railway():
+        console.print(
+            "[red]Database connection failed.[/red] "
+            "Your DATABASE_URL uses a Railway private host (.railway.internal), "
+            "which is only reachable from inside Railway's network."
+        )
+        console.print(
+            "Use Railway's [bold]public/external[/bold] Postgres URL for local development, "
+            "or run this command inside a Railway shell."
+        )
+        return
+
+    console.print(
+        "[red]Database connection failed.[/red] "
+        "Check that DATABASE_URL is set correctly and the Postgres server is reachable."
+    )
+
+
 def _format_empty_export_guidance(docket: str, pipeline_has_run: bool) -> str:
     """Return a helpful message when export finds zero submissions."""
     if pipeline_has_run:
@@ -134,13 +156,17 @@ def status(docket: str):
     """Show pipeline status for a docket."""
     from cftc_pipeline.db.models import Docket
 
-    with get_db() as db:
-        d = db.query(Docket).filter(Docket.docket_id == docket).first()
-        if not d:
-            console.print(f"[red]Docket '{docket}' not found.[/red]")
-            sys.exit(1)
+    try:
+        with get_db() as db:
+            d = db.query(Docket).filter(Docket.docket_id == docket).first()
+            if not d:
+                console.print(f"[red]Docket '{docket}' not found.[/red]")
+                sys.exit(1)
 
-        stage_status = get_pipeline_status(db, d.id)
+            stage_status = get_pipeline_status(db, d.id)
+    except OperationalError:
+        _print_db_connection_help()
+        sys.exit(1)
 
     table = Table(title=f"Pipeline status: {docket}")
     table.add_column("Stage", style="cyan")
@@ -234,23 +260,11 @@ def create_tables():
     """Create all database tables (idempotent)."""
     from cftc_pipeline.db.models import Base
     from cftc_pipeline.db.session import engine
-    from cftc_pipeline.config import settings
-
     try:
         Base.metadata.create_all(engine)
-    except OperationalError as exc:
-        if _is_likely_railway_private_host(settings.database_url) and not _running_on_railway():
-            console.print(
-                "[red]Database connection failed.[/red] "
-                "Your DATABASE_URL uses a Railway private host (.railway.internal), "
-                "which is only reachable from inside Railway's network."
-            )
-            console.print(
-                "Use Railway's [bold]public/external[/bold] Postgres URL for local development, "
-                "or run this command inside a Railway shell."
-            )
-            sys.exit(1)
-        raise exc
+    except OperationalError:
+        _print_db_connection_help()
+        sys.exit(1)
     console.print("[green]Tables created (or already exist).[/green]")
 
 
